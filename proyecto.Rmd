@@ -1,0 +1,430 @@
+---
+title: "Proyecto Christopher Cadena y Allan Marín"
+output: 
+  flexdashboard::flex_dashboard:
+    orientation: columns
+    vertical_layout: fill
+---
+
+```{r setup, include=FALSE}
+library(flexdashboard)
+library(DT)
+library(ggplot2)
+library(plotly)
+library(stringi)
+library(dplyr)
+library(leaflet)
+library(sf)
+library(readxl)
+library(tidyverse)
+library(ggthemes)
+library(ggdark)
+```
+
+```{r, include=FALSE}
+delitos <-
+  read_xls(path = "C:/PROYECTO/estadisticaspoliciales2021.xls")
+```
+
+```{r, include FALSE}
+delitos <-
+  read_xls(path = "C:/PROYECTO/estadisticaspoliciales2021.xls")
+
+provincias <-
+  st_read(
+    dsn = "C:/PROYECTO/provincias.geojson",
+    quiet = TRUE
+  ) %>%
+  st_transform(4326)
+
+
+provincias <-
+  provincias %>%
+  st_transform(5367) %>%
+  st_simplify(dTolerance = 100) %>% # simplificación de geometrías
+  st_transform(4326)
+
+cantones <-
+  st_read(
+    dsn = "C:/PROYECTO/cantones_simplificados.geojson",
+    quiet = TRUE
+  ) %>%
+  st_transform(4326)
+
+cantones <-
+  cantones %>%
+  st_transform(5367) %>%
+  st_simplify(dTolerance = 100) %>% # simplificación de geometrías
+  st_transform(4326)
+
+distritos <-
+  st_read(
+    dsn = "C:/PROYECTO/distritos_simplificados.geojson",
+    quiet = TRUE
+  ) %>%
+  st_transform(4326)
+
+distritos <-
+  distritos %>%
+  st_transform(5367) %>%
+  st_simplify(dTolerance = 100) %>% # simplificación de geometrías
+  st_transform(4326)
+
+
+provincias <-
+  provincias %>%
+  mutate(provincia_normalizado = tolower(stri_trans_general(provincia, id = "Latin-ASCII")))
+
+delitos <-
+  delitos %>%
+  mutate(provincia_normalizado = tolower(stri_trans_general(Provincia, id = "Latin-ASCII")))
+
+delitos <-
+  delitos %>%
+  left_join(
+    dplyr::select(
+      st_drop_geometry(provincias),
+      cod_provin,
+      provincia_normalizado
+    ),
+    by = "provincia_normalizado",
+    copy = FALSE,
+    keep = FALSE
+  )
+
+delitos_x_provincia <-
+  delitos %>%
+  count(cod_provin, name = "delitos")
+
+provincias_delitos <-
+  provincias %>%
+  left_join(
+    delitos_x_provincia,
+    by = "cod_provin",
+    copy = FALSE,
+    keep = FALSE
+  )
+
+
+cantones <-
+  cantones %>%
+  mutate(canton_normalizado = tolower(stri_trans_general(canton, id = "Latin-ASCII")))
+
+delitos <-
+  delitos %>%
+  mutate(canton_normalizado = tolower(stri_trans_general(Canton, id = "Latin-ASCII")))
+
+
+delitos <-
+  delitos %>%
+  mutate(Canton = if_else(Canton == "LEON CORTES", "LEON CORTES CASTRO", Canton)) %>%
+  mutate(Canton = if_else(Canton == "VASQUEZ DE CORONADO", "VAZQUEZ DE CORONADO", Canton))
+
+delitos <-
+  delitos %>%
+  mutate(canton_normalizado = tolower(stri_trans_general(Canton, id = "Latin-ASCII")))
+
+
+delitos <-
+  delitos %>%
+  left_join(
+    dplyr::select(
+      st_drop_geometry(cantones),
+      cod_canton,
+      canton_normalizado
+    ),
+    by = "canton_normalizado",
+    copy = FALSE,
+    keep = FALSE
+  )
+
+
+
+delitos_x_canton <-
+  delitos %>%
+  count(cod_canton, name = "delitos")
+
+cantones_delitos <-
+  cantones %>%
+  left_join(
+    delitos_x_canton,
+    by = "cod_canton",
+    copy = FALSE,
+    keep = FALSE
+  )
+
+
+distritos <-
+  distritos %>%
+  mutate(distrito_normalizado = tolower(stri_trans_general(distrito, id = "Latin-ASCII")))
+
+delitos <-
+  delitos %>%
+  mutate(distrito_normalizado = tolower(stri_trans_general(Distrito, id = "Latin-ASCII")))
+
+
+delitos <-
+  delitos %>%
+  mutate(Distrito = if_else(cod_canton == 703 & Distrito == "CAIRO", "EL CAIRO", Distrito)) %>%
+  mutate(Distrito = if_else(cod_canton == 210 & Distrito == "FORTUNA", "LA FORTUNA", Distrito)) %>%
+  mutate(Distrito = if_else(cod_canton == 410 & Distrito == "HORQUETAS", "LAS HORQUETAS", Distrito)) %>%
+  mutate(Distrito = if_else(cod_canton == 119 & Distrito == "GENERAL", "EL GENERAL", Distrito)) %>%
+  mutate(Distrito = if_else(cod_canton == 402 & Distrito == "SAN JOSE DE LA MONTA?A", "SAN JOSE DE LA MONTANA", Distrito)) %>%
+  mutate(Distrito = if_else(cod_canton == 602 & Distrito == "MACACOMA", "MACACONA", Distrito)) %>%
+  mutate(Distrito = if_else(cod_canton == 301 & Distrito == "SAN FRANCISCO", "AGUACALIENTE O SAN FRANCISCO", Distrito)) %>%
+  mutate(Distrito = if_else(cod_canton == 209 & Distrito == "CEIBA", "LA CEIBA", Distrito)) %>%
+  mutate(Distrito = if_else(cod_canton == 605 & Distrito == "CORTES", "PUERTO CORTES", Distrito)) %>%
+  mutate(Distrito = if_else(cod_canton == 201 & Distrito == "LA GARITA", "GARITA", Distrito)) %>%
+  mutate(Distrito = if_else(cod_canton == 119 & Distrito == "LA AMISTAD", "LA  AMISTAD", Distrito)) %>% # el nombre del IGN tiene un espacio en blanco de más
+  mutate(Distrito = if_else(cod_canton == 213 & Distrito == "SAN JOSE (PIZOTE)", "SAN JOSE O PIZOTE", Distrito)) %>%
+  mutate(Distrito = if_else(cod_canton == 607 & Distrito == "JIMENEZ", "PUERTO JIMENEZ", Distrito)) %>%
+  mutate(Distrito = if_else(cod_canton == 405 & Distrito == "LOS ANGELES", "ANGELES", Distrito)) %>%
+  mutate(Distrito = if_else(cod_canton == 301 & Distrito == "GUADALUPE", "GUADALUPE O ARENILLA", Distrito)) %>%
+  mutate(Distrito = if_else(cod_canton == 407 & Distrito == "ASUNCION", "LA ASUNCION", Distrito)) %>%
+  mutate(Distrito = if_else(cod_canton == 209 & Distrito == "MASTATE", "EL MASTATE", Distrito)) %>%
+  mutate(Distrito = if_else(cod_canton == 604 & Distrito == "UNION", "LA UNION", Distrito)) %>%
+  mutate(Distrito = if_else(cod_canton == 108 & Distrito == "MATA PLATANO", "MATA DE PLATANO", Distrito)) %>%
+  mutate(Distrito = if_else(cod_canton == 608 & Distrito == "AGUA BUENA", "AGUABUENA", Distrito)) %>%
+  mutate(Distrito = if_else(cod_canton == 206 & Distrito == "ROSARIO", "EL ROSARIO", Distrito)) %>%
+  mutate(Distrito = if_else(cod_canton == 210 & Distrito == "PALMERA", "LA PALMERA", Distrito)) %>%
+  mutate(Distrito = if_else(cod_canton == 210 & Distrito == "TIGRA", "LA TIGRA", Distrito)) %>%
+  mutate(Distrito = if_else(cod_canton == 706 & Distrito == "MERECEDES", "MERCEDES", Distrito)) %>%
+  mutate(Distrito = if_else(cod_canton == 504 & Distrito == "FORTUNA", "LA FORTUNA", Distrito)) %>%
+  mutate(Distrito = if_else(cod_canton == 605 & Distrito == "DRAKE", "BAHIA DRAKE", Distrito)) %>%
+  mutate(Distrito = if_else(cod_canton == 207 & Distrito == "GRANJA", "LA GRANJA", Distrito)) %>%
+  mutate(Distrito = if_else(cod_canton == 410 & Distrito == "CURE?A", "CURENA", Distrito)) %>%
+  mutate(Distrito = if_else(cod_canton == 305 & Distrito == "EL CHIRRIPO", "CHIRRIPO", Distrito)) %>%
+  mutate(Distrito = if_else(cod_canton == 106 & Distrito == "LA LEGUA", "LEGUA", Distrito)) %>%
+  mutate(Distrito = if_else(cod_canton == 211 & Distrito == "TAPEZCO", "TAPESCO", Distrito))
+
+
+delitos <-
+  delitos %>%
+  mutate(distrito_normalizado = tolower(stri_trans_general(Distrito, id = "Latin-ASCII")))
+
+
+delitos <-
+  delitos %>%
+  left_join(
+    dplyr::select(
+      st_drop_geometry(distritos),
+      codigo_dta,
+      cod_canton,
+      distrito_normalizado
+    ),
+    by = c("cod_canton" = "cod_canton", "distrito_normalizado" = "distrito_normalizado"),
+    copy = FALSE,
+    keep = FALSE
+  )
+
+delitos_x_distrito <-
+  delitos %>%
+  count(codigo_dta, name = "delitos")
+
+distritos_delitos <-
+  distritos %>%
+  left_join(
+    delitos_x_distrito,
+    by = "codigo_dta",
+    copy = FALSE,
+    keep = FALSE
+  ) %>%
+  mutate(delitos = ifelse(is.na(delitos), 0, delitos))
+
+colores_distritos_delitos <-
+  colorNumeric(palette = "Reds",
+               domain = distritos_delitos$delitos,
+               na.color = "transparent")
+```
+
+
+Column {data-width=575, .tabset}
+-----------------------------------------------------------------------
+
+### Mapa de coropletas
+
+```{r}
+leaflet() %>%
+  setView(
+    lng = -84.19452,
+    lat = 9.572735,
+    zoom = 7) %>%
+  addTiles(group = "OpenStreetMap") %>% 
+  addPolygons(
+    data = distritos_delitos,
+    fillColor = ~ colores_distritos_delitos(distritos_delitos$delitos),
+    fillOpacity = 0.8,
+    color = "black",
+    stroke = TRUE,
+    weight = 1.0,
+    popup = paste(
+      paste(
+        "<strong>Cantón:</strong>",
+        distritos_delitos$canton
+      ),
+      paste(
+        "<strong>Distrito:</strong>",
+        distritos_delitos$distrito
+      ),
+      paste(
+        "<strong>Delitos:</strong>",
+        distritos_delitos$delitos
+      ),
+      sep = '<br/>'
+    ),
+    group = "Delitos en distritos"
+  ) %>%
+  addLayersControl(
+    baseGroups = c("OpenStreetMap"),
+    overlayGroups = c("Delitos en distritos")
+  ) %>%
+  addLegend(
+    position = "bottomleft",
+    pal = colores_distritos_delitos,
+    values = distritos_delitos$delitos,
+    group = "Delitos en distritos",
+    title = "Cantidad de delitos"
+  )
+```
+
+
+### Tabla DT
+```{r}
+delitos %>%
+  dplyr::select(Delito,
+                Fecha,
+                Victima,
+                Edad,
+                Genero,
+                Provincia,
+                Canton,
+                Distrito) %>%
+  mutate(Fecha = as.Date(Fecha, format = "%d/%m/%Y")) %>%
+  datatable(
+    options = list(
+      pageLength = 20,
+      language = list(url = '//cdn.datatables.net/plug-ins/1.10.11/i18n/Spanish.json')
+    ),
+    colnames = c(
+      "Delito",
+      "Fecha",
+      "Víctima",
+      "Edad",
+      "Género",
+      "Provincia",
+      "Cantón",
+      "Distrito"
+    )
+  )
+```
+
+
+Column {data-width=425, .tabset}
+-----------------------------------------------------------------------
+
+### Delitos por tipo de delito
+
+```{r}
+Cantidad_de_delito_por_tipo <-
+  delitos %>%
+  count(Delito) %>%
+  ggplot(aes(x = reorder(Delito, n), y = n)) +
+  geom_bar(stat = "identity") +
+  ggtitle("Delitos por tipo de delito") +
+  xlab("Tipo de Delito") +
+  ylab("Cantidad") +
+  coord_flip() +
+  dark_theme_gray() +
+  theme(legend.position = "top")
+
+Cantidad_de_delito_por_tipo %>%
+  ggplotly() %>%
+  config(locale = "es")
+```
+
+### Delitos por víctima
+```{r}
+delitos_por_victima <-
+  delitos %>%
+  count(Victima) %>%
+  ggplot(aes(x = reorder(Victima, n), y = n)) +
+  geom_bar(stat = "identity") +
+  ggtitle("Delitos por víctima") +
+  xlab("Tipo de Víctima") +
+  ylab("Cantidad") +
+  coord_flip() +
+  dark_theme_gray() +
+  theme(legend.position = "top")
+
+delitos_por_victima %>%
+  ggplotly() %>%
+  config(locale = "es")
+```
+
+### Delitos por mes
+```{r}
+ggplot2_delitos_por_mes <-
+  delitos %>%
+  mutate(fecha = lubridate::month(Fecha))
+mes <-
+  c(
+    "Enero",
+    "Febrero",
+    "Marzo",
+    "Abril",
+    "Mayo",
+    "Junio",
+    "Julio",
+    "Agosto",
+    "septiembre",
+    "Octubre",
+    "Noviembre",
+    "Diciembre"
+  )
+ggplot2_delitos_por_mes <- ggplot2_delitos_por_mes %>%
+  count(fecha) %>%
+  ggplot(aes(x = fecha, y = n)) +
+  geom_bar(stat = "identity") +
+  ggtitle("Cantidad de delitos por mes") +
+  xlab("Mes") +
+  ylab("Cantidad") +
+  dark_theme_gray() +
+  theme(legend.position = "top")
+
+ggplotly(ggplot2_delitos_por_mes) %>% config(locale = 'es')
+```
+
+
+### Delitos por género
+```{r}
+Proporcion_de_Delito_por_Genero <-
+  delitos %>%
+  ggplot(aes(x = Delito, fill = Genero)) +
+  geom_bar(position = "fill") +
+  ggtitle("Proporción de delito por Género") +
+  xlab("Delito") +
+  ylab("Proporción") +
+  labs(fill = "Género") +
+  coord_flip() +
+  dark_theme_gray() +
+  theme(legend.position = "top")
+
+ggplotly(Proporcion_de_Delito_por_Genero) %>% config(locale = 'es')
+```
+
+### Proporción de Delitos por tipo de Delitos
+```{r}
+Proporcion_de_Delito <-
+  delitos %>%
+  ggplot(aes(x = Delito, fill = Delito)) +
+  geom_bar(position = "fill") +
+  ggtitle("Proporción de delito por tipo de Delito") +
+  xlab("Delito") +
+  ylab("Proporción") +
+  labs(fill = "Tipo de Delito") +
+  coord_flip() +
+  dark_theme_gray() +
+  theme(legend.position = "top")
+
+ggplotly(Proporcion_de_Delito) %>% config(locale = 'es')
+```
